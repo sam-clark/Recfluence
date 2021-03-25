@@ -1,6 +1,7 @@
 from logging import Logger
 import tempfile
 import time
+import re
 import secrets
 from args import Args, load_args
 from datetime import datetime, timezone
@@ -123,8 +124,20 @@ select * from s
 
             log.debug('video_entities - processing entities')
 
+            def clean_text(text):
+                # Remove newlines and lowercase if mostly uppercase (both first letter or all letters)
+                text = re.sub("\s+", " ", text)
+                if len(text) < 10:
+                    return text
+                if sum(1 for x in text if x.islower()) == 0:
+                    return text.lower()
+                tok_l = text.split(" ")
+                if len(tok_l) >= 5 and sum(1 for tok in tok_l if tok[0].islower()) == 0:
+                    return text.lower()
+                return text
+
             def entities(rows: List[T], getVal: Callable[[T], str]) -> Iterable[Iterable[Entity]]:
-                res = list(space_lg.pipe([getVal(r) or "" for r in rows], n_process=4))
+                res = list(space_lg.pipe([clean_text(getVal(r) or "") for r in rows], n_process=4))
                 return map(lambda r: [Entity(ent.text.strip(), ent.label_) for ent in r.ents if ent.label_ not in EXCLUDE_LABELS], res)
 
             def captions(json) -> List[DbCaption]:
